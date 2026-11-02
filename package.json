@@ -1,0 +1,24 @@
+{
+  "name": "ourfoodhub",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "packages/core",
+    "web",
+    "tools/import-history"
+  ],
+  "scripts": {
+    "dev": "npm run dev -w web",
+    "build": "npm run build -w web && npm run build --prefix functions",
+    "test": "npm test -w @ourfoodhub/core && npm test -w @ourfoodhub/import-history && npm test --prefix functions",
+    "typecheck": "npm run typecheck -w @ourfoodhub/core && npm run typecheck -w web && npm run typecheck -w @ourfoodhub/import-history && npm run typecheck --prefix functions",
+    "emulators": "firebase emulators:start",
+    "test:rules": "firebase emulators:exec --only firestore \"npm run test:rules -w web\"",
+    "import": "npm run import -w @ourfoodhub/import-history --",
+    "deploy": "firebase deploy",
+    "deploy:noai": "firebase deploy --except functions"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

@@ -1,0 +1,38 @@
+# Temp folders
+tmp/
+tmp/*
+temp/
+temp/*
+
+# Samples
+docs/samples/
+docs/samples/*
+
+# Dependencies and build output
+node_modules/
+dist/
+lib/
+dev-dist/
+*.tsbuildinfo
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+functions/.secret.local
+service-account*.json
+
+# Firebase
+.firebase/
+firebase-debug.log*
+firestore-debug.log*
+ui-debug.log*
+emulator-data/
+
+# History import working files (contain personal data)
+tools/import-history/out/
+
+# Editors / OS
+.DS_Store
+.vscode/*
+!.vscode/extensions.json

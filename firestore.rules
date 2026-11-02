@@ -1,0 +1,99 @@
+rules_version = '2';
+
+// OurFoodHub: one shared pantry, Google sign-in restricted to the accounts
+// listed in allowedUsers/{email lowercase}. The list is managed from the
+// Firebase console or with `npm run import -- allow <email>`.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null
+        && request.auth.token.email != null
+        && request.auth.token.email_verified == true;
+    }
+
+    function allowed() {
+      return signedIn()
+        && exists(/databases/$(database)/documents/allowedUsers/$(request.auth.token.email.lower()));
+    }
+
+    function isTip(v) {
+      return v in ['v', 'f', 'c', 'd', 'b'];
+    }
+
+    function isIsoDate(v) {
+      return v is string && v.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$');
+    }
+
+    function validProduct(d) {
+      return d.keys().hasOnly([
+          'name', 'nameKey', 'tip', 'quantity', 'quantityLog', 'expiryDate', 'status', 'seq',
+          'sessionId', 'createdAt', 'createdBy', 'consumedAt', 'consumedInSessionId', 'consumedBy', 'updatedAt'])
+        && d.keys().hasAll(['name', 'nameKey', 'tip', 'quantity', 'status', 'seq', 'createdAt', 'createdBy'])
+        && d.name is string && d.name.size() > 0 && d.name.size() <= 120
+        && d.nameKey is string && d.nameKey.size() <= 120
+        && (d.tip == null || isTip(d.tip))
+        && d.createdBy is string
+        && d.quantity is int && d.quantity >= 1 && d.quantity <= 999
+        && d.quantityLog is list && d.quantityLog.size() <= 200
+        && (d.expiryDate == null || isIsoDate(d.expiryDate))
+        && d.status in ['active', 'consumed']
+        && d.seq is number
+        && d.createdAt is timestamp
+        && (d.consumedAt == null || d.consumedAt is timestamp);
+    }
+
+    function validSession(id, d) {
+      return isIsoDate(id)
+        && d.keys().hasOnly(['date', 'status', 'openedAt', 'openedBy', 'closedAt', 'addedCount', 'consumedCount', 'source', 'order'])
+        && d.date == id
+        && d.status in ['open', 'closed']
+        && d.openedAt is timestamp
+        && (d.closedAt == null || d.closedAt is timestamp)
+        && d.addedCount is int && d.consumedCount is int
+        && d.source in ['app', 'import'];
+    }
+
+    function validHint(d) {
+      return d.keys().hasOnly(['displayName', 'aliases', 'counts', 'override', 'lastSeen', 'source'])
+        && d.displayName is string && d.displayName.size() > 0 && d.displayName.size() <= 120
+        && d.aliases is list && d.aliases.size() <= 50
+        && d.counts is map && d.counts.keys().hasOnly(['v', 'f', 'c', 'd', 'b'])
+        && (d.override == null || isTip(d.override))
+        && d.source in ['import', 'user', 'llm'];
+    }
+
+    // Each user may only check their own authorization; nobody writes from the app.
+    match /allowedUsers/{email} {
+      allow get: if signedIn() && email == request.auth.token.email.lower();
+      allow list, write: if false;
+    }
+
+    match /products/{id} {
+      allow read: if allowed();
+      allow create, update: if allowed() && validProduct(request.resource.data);
+      // Only for products entered by mistake; consumed products are kept.
+      allow delete: if allowed();
+    }
+
+    match /sessions/{id} {
+      allow read: if allowed();
+      allow create, update: if allowed() && validSession(id, request.resource.data);
+      // Only an empty session can be removed (it is not recorded); the others are history.
+      allow delete: if allowed()
+        && resource.data.source == 'app'
+        && resource.data.addedCount == 0
+        && resource.data.consumedCount == 0;
+    }
+
+    match /categoryHints/{id} {
+      allow read: if allowed();
+      allow create, update: if allowed() && validHint(request.resource.data);
+      allow delete: if allowed();
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
